@@ -136,17 +136,37 @@
           body: JSON.stringify({ message: userMessage }),
         });
 
+        console.log("Response status:", response.status);
+        
         if (!response.ok) {
           throw new Error(`Server error: ${response.statusText}`);
         }
 
-        const data = await response.json();
-
-        // Assuming n8n returns { reply: "Agent's reply text" }
-        const agentReply = data.reply || 'No response from agent.';
+        // Try to parse JSON, but fallback to text if it's not valid JSON
+        let agentReply;
+        try {
+          const text = await response.text();
+          console.log("Raw response:", text);
+          
+          // Try to parse as JSON if possible
+          if (text && text.trim()) {
+            try {
+              const data = JSON.parse(text);
+              agentReply = data.reply || 'No specific reply in response.';
+            } catch (parseError) {
+              // Not valid JSON, use the text directly
+              agentReply = text || 'No readable response from agent.';
+            }
+          } else {
+            agentReply = 'Message sent successfully, but no response content.';
+          }
+        } catch (readError) {
+          agentReply = 'Message sent, but could not read response.';
+        }
 
         appendMessage(agentReply, 'agent');
       } catch (error) {
+        console.error("Error details:", error);
         appendMessage('Error: ' + error.message, 'agent');
       } finally {
         messageInput.disabled = false;
