@@ -86,21 +86,57 @@
     .chat-input button:hover {
       background: #0056b3;
     }
+    .debug-info {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      max-width: 300px;
+      overflow: auto;
+      max-height: 150px;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div class="chat-container">
-    <div class="chat-header">Chat with n8n Agent</div>
+    <div class="chat-header">Chat with n8n Agent v2</div>
     <div id="chatMessages" class="chat-messages"></div>
     <form id="chatForm" class="chat-input" onsubmit="return sendMessage(event)">
       <textarea id="messageInput" placeholder="Type your message..." required></textarea>
       <button type="submit">➤</button>
     </form>
   </div>
+  
+  <div id="debugInfo" class="debug-info"></div>
 
   <script>
     const chatMessages = document.getElementById('chatMessages');
     const messageInput = document.getElementById('messageInput');
+    const debugInfo = document.getElementById('debugInfo');
+    
+    // For debugging
+    let isDebugMode = false;
+    
+    // Toggle debug mode with Alt+D
+    document.addEventListener('keydown', function(e) {
+      if (e.altKey && e.key === 'd') {
+        isDebugMode = !isDebugMode;
+        debugInfo.style.display = isDebugMode ? 'block' : 'none';
+      }
+    });
+    
+    function debug(message) {
+      if (isDebugMode) {
+        console.log(message);
+        debugInfo.innerHTML += message + '<br>';
+        debugInfo.scrollTop = debugInfo.scrollHeight;
+      }
+    }
 
     // Replace this URL with your actual n8n webhook URL
     const N8N_WEBHOOK_URL = 'https://gainliftoff.app.n8n.cloud/webhook/916dff6c-3a29-4fdd-9509-1c88887ff2cc';
@@ -113,6 +149,11 @@
       chatMessages.appendChild(msgDiv);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
+
+    // Display initial instruction
+    window.onload = function() {
+      appendMessage("Hi! I'm your n8n assistant. How can I help you today?", 'agent');
+    };
 
     // Send message handler
     async function sendMessage(event) {
@@ -127,46 +168,64 @@
       messageInput.disabled = true;
 
       try {
+        // Create payload in n8n expected format
+        // n8n often expects data in the root of the object
+        const payload = {
+          message: userMessage,
+          timestamp: new Date().toISOString(),
+          user_id: "web_user_" + Math.floor(Math.random() * 1000000)
+        };
+        
+        debug("Sending payload: " + JSON.stringify(payload));
+        
         // Send message to n8n webhook
         const response = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json, text/plain, */*'
           },
-          body: JSON.stringify({ message: userMessage }),
+          body: JSON.stringify(payload)
         });
 
-        console.log("Response status:", response.status);
+        debug("Response status: " + response.status);
         
         if (!response.ok) {
-          throw new Error(`Server error: ${response.statusText}`);
+          throw new Error(`Server error: ${response.status} ${response.statusText}`);
         }
 
         // Try to parse JSON, but fallback to text if it's not valid JSON
         let agentReply;
         try {
           const text = await response.text();
-          console.log("Raw response:", text);
+          debug("Raw response: " + text);
           
           // Try to parse as JSON if possible
           if (text && text.trim()) {
             try {
               const data = JSON.parse(text);
-              agentReply = data.reply || 'No specific reply in response.';
+              // Try different common response formats
+              agentReply = data.reply || data.response || data.message || data.content || 
+                          (data.data ? (data.data.reply || data.data.response || data.data.message) : null) ||
+                          'Received response but couldn\'t find a message field.';
+              
+              debug("Parsed JSON: " + JSON.stringify(data));
             } catch (parseError) {
+              debug("JSON parse error: " + parseError.message);
               // Not valid JSON, use the text directly
               agentReply = text || 'No readable response from agent.';
             }
           } else {
-            agentReply = 'Message sent successfully, but no response content.';
+            agentReply = 'Message sent successfully, but the webhook returned an empty response.';
           }
         } catch (readError) {
-          agentReply = 'Message sent, but could not read response.';
+          debug("Text read error: " + readError.message);
+          agentReply = 'Message sent, but could not read response from webhook.';
         }
 
         appendMessage(agentReply, 'agent');
       } catch (error) {
-        console.error("Error details:", error);
+        debug("Error: " + error.message);
         appendMessage('Error: ' + error.message, 'agent');
       } finally {
         messageInput.disabled = false;
