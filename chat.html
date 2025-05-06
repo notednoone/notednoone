@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>n8n Chat Interface</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f7f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .chat-container {
+      width: 400px;
+      max-width: 100%;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      height: 600px;
+    }
+    .chat-header {
+      padding: 20px;
+      background: #007bff;
+      color: white;
+      font-weight: bold;
+      font-size: 1.2em;
+      border-radius: 8px 8px 0 0;
+      text-align: center;
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      background: #e9ebee;
+    }
+    .message {
+      margin-bottom: 15px;
+      max-width: 80%;
+      padding: 10px 15px;
+      border-radius: 20px;
+      clear: both;
+      word-wrap: break-word;
+    }
+    .message.user {
+      background: #007bff;
+      color: white;
+      float: right;
+      border-bottom-right-radius: 0;
+    }
+    .message.agent {
+      background: #e1e1e1;
+      color: #333;
+      float: left;
+      border-bottom-left-radius: 0;
+    }
+    .chat-input {
+      display: flex;
+      border-top: 1px solid #ccc;
+    }
+    .chat-input textarea {
+      flex: 1;
+      resize: none;
+      border: none;
+      padding: 15px;
+      font-size: 1em;
+      border-radius: 0 0 0 8px;
+      outline: none;
+      height: 60px;
+    }
+    .chat-input button {
+      background: #007bff;
+      border: none;
+      color: white;
+      padding: 0 20px;
+      font-size: 1.2em;
+      cursor: pointer;
+      border-radius: 0 0 8px 0;
+      transition: background 0.3s ease;
+    }
+    .chat-input button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">Chat with n8n Agent</div>
+    <div id="chatMessages" class="chat-messages"></div>
+    <form id="chatForm" class="chat-input" onsubmit="return sendMessage(event)">
+      <textarea id="messageInput" placeholder="Type your message..." required></textarea>
+      <button type="submit">➤</button>
+    </form>
+  </div>
+
+  <script>
+    const chatMessages = document.getElementById('chatMessages');
+    const messageInput = document.getElementById('messageInput');
+
+    // Replace this URL with your actual n8n webhook URL
+    const N8N_WEBHOOK_URL = 'https://gainliftoff.app.n8n.cloud/webhook/916dff6c-3a29-4fdd-9509-1c88887ff2cc';
+
+    // Append a message to the chat window
+    function appendMessage(text, sender) {
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message', sender);
+      msgDiv.textContent = text;
+      chatMessages.appendChild(msgDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Send message handler
+    async function sendMessage(event) {
+      event.preventDefault();
+
+      const userMessage = messageInput.value.trim();
+      if (!userMessage) return;
+
+      // Display user message
+      appendMessage(userMessage, 'user');
+      messageInput.value = '';
+      messageInput.disabled = true;
+
+      try {
+        // Send message to n8n webhook
+        const response = await fetch(N8N_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: userMessage }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Assuming n8n returns { reply: "Agent's reply text" }
+        const agentReply = data.reply || 'No response from agent.';
+
+        appendMessage(agentReply, 'agent');
+      } catch (error) {
+        appendMessage('Error: ' + error.message, 'agent');
+      } finally {
+        messageInput.disabled = false;
+        messageInput.focus();
+      }
+    }
+  </script>
+</body>
+</html>
