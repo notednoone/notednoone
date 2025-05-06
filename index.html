@@ -133,7 +133,7 @@
             };
             
             // Send data to n8n webhook v3
-            fetch('https://gainliftoff.app.n8n.cloud/webhook/363cd5fa-b109-4dab-907f-3c82017aa931', {
+            fetch(webhookUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
